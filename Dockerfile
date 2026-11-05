@@ -1,5 +1,5 @@
-FROM ubuntu:latest
-
+FROM ubuntu:latest AS builder
+RUN useradd -u 10001 scratchuser
 ARG GOVER=1.27.1
 ARG TARGETARCH
 
@@ -15,4 +15,13 @@ WORKDIR /app
 COPY main.go go.mod /app/
 RUN CGO_ENABLED=0 /usr/bin/go/bin/go build -o webapp
 
-ENTRYPOINT [ "./webapp" ]
+# Run the app using the scratch image to reduce attack surface area
+FROM scratch
+# Copy the webapp and SSL certificates
+COPY --from=builder /etc/passwd /etc/passwd
+COPY --from=builder /app/webapp /webapp
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+# Run the app as a non-privilledged user
+USER scratchuser
+EXPOSE 8080
+ENTRYPOINT [ "/webapp" ]
